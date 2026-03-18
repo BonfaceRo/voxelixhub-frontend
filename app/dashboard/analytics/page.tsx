@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client';
 
 import { useState } from 'react';
@@ -49,6 +50,14 @@ const AI_INSIGHTS = [
 function fmt(n: number): string {
   return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
+
+const tooltipStyle = {
+  borderRadius: '10px',
+  border: '1px solid #2a2a4a',
+  background: '#12122a',
+  color: '#fff',
+  fontSize: '12px'
+};
 
 export default function AnalyticsPage() {
   const [range, setRange] = useState('30d');
@@ -118,11 +127,8 @@ export default function AnalyticsPage() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" />
               <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#8b8fd8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} tickFormatter={(v: any) => 'R' + Math.round(Number(v) / 1000) + 'k'} />
-              <Tooltip
-                contentStyle={{ borderRadius: '10px', border: '1px solid #2a2a4a', background: '#12122a', color: '#fff', fontSize: '12px' }}
-                formatter={(v: any, name: any) => [name === 'revenue' ? 'R' + fmt(Number(v)) : v, name]}
-              />
+              <YAxis tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} tickFormatter={(v) => 'R' + Math.round(Number(v) / 1000) + 'k'} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v, name) => [name === 'revenue' ? 'R' + fmt(Number(v)) : String(v), String(name)]} />
               <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="url(#revGrad)" strokeWidth={2} name="revenue" />
               <Area type="monotone" dataKey="leads"   stroke="#6929f5" fill="url(#leadGrad)" strokeWidth={2} name="leads" />
             </AreaChart>
@@ -141,10 +147,7 @@ export default function AnalyticsPage() {
                 <div className="h-6 rounded-lg overflow-hidden bg-dark-200">
                   <div
                     className="h-full rounded-lg flex items-center justify-end pr-2 transition-all"
-                    style={{
-                      width: (f.value / FUNNEL[0].value * 100) + '%',
-                      background: f.color,
-                    }}
+                    style={{ width: (f.value / FUNNEL[0].value * 100) + '%', background: f.color }}
                   >
                     {i > 0 && (
                       <span className="text-white text-xs font-semibold">
@@ -168,12 +171,9 @@ export default function AnalyticsPage() {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={CHANNEL_DATA} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} tickFormatter={(v: any) => 'R' + Math.round(Number(v) / 1000) + 'k'} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} tickFormatter={(v) => 'R' + Math.round(Number(v) / 1000) + 'k'} />
               <YAxis dataKey="channel" type="category" tick={{ fontSize: 12, fill: '#8b8fd8' }} axisLine={false} tickLine={false} width={80} />
-              <Tooltip
-                contentStyle={{ borderRadius: '10px', border: '1px solid #2a2a4a', background: '#12122a', color: '#fff', fontSize: '12px' }}
-                formatter={(v: any) => ['R' + fmt(Number(v)), 'Revenue']}
-              />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => ['R' + fmt(Number(v)), 'Revenue']} />
               <Bar dataKey="revenue" fill="#6929f5" radius={[0, 4, 4, 0]} />
             </BarChart>
           </ResponsiveContainer>
@@ -186,10 +186,7 @@ export default function AnalyticsPage() {
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" />
               <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} unit="%" />
-              <Tooltip
-                contentStyle={{ borderRadius: '10px', border: '1px solid #2a2a4a', background: '#12122a', color: '#fff', fontSize: '12px' }}
-                formatter={(v: any) => [v + '%', '']}
-              />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v) => [String(v) + '%', '']} />
               <Bar dataKey="open"  name="Open"  fill="#6929f5" radius={[3, 3, 0, 0]} />
               <Bar dataKey="click" name="Click" fill="#f5a623" radius={[3, 3, 0, 0]} />
               <Bar dataKey="conv"  name="Conv"  fill="#10b981" radius={[3, 3, 0, 0]} />
@@ -218,10 +215,7 @@ export default function AnalyticsPage() {
                 <p className="text-sm text-gray-300 leading-relaxed">{ins.text}</p>
                 <div className="flex items-center gap-2 mt-2">
                   <div className="flex-1 h-1.5 bg-dark-100 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-accent-500 rounded-full"
-                      style={{ width: ins.confidence + '%' }}
-                    />
+                    <div className="h-full bg-accent-500 rounded-full" style={{ width: ins.confidence + '%' }} />
                   </div>
                   <span className="text-xs text-accent-400 font-semibold">{ins.confidence}%</span>
                 </div>
@@ -233,4 +227,3 @@ export default function AnalyticsPage() {
     </div>
   );
 }
-// force rebuild Wed 18 Mar 2026 20:55:07 SAST
