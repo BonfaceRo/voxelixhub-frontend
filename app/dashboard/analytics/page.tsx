@@ -6,7 +6,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Users, MousePointer, Mail, Zap } from 'lucide-react';
+import { TrendingUp, TrendingDown, DollarSign, Users, MousePointer, Zap } from 'lucide-react';
 
 const MONTHLY_REVENUE = [
   { month: 'Oct', revenue: 180000, leads: 89 },
@@ -118,10 +118,10 @@ export default function AnalyticsPage() {
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" />
               <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#8b8fd8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} tickFormatter={(v) => 'R' + Math.round(v / 1000) + 'k'} />
+              <YAxis tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} tickFormatter={(v: any) => 'R' + Math.round(Number(v) / 1000) + 'k'} />
               <Tooltip
                 contentStyle={{ borderRadius: '10px', border: '1px solid #2a2a4a', background: '#12122a', color: '#fff', fontSize: '12px' }}
-                formatter={(v: number, name: string) => [name === 'revenue' ? 'R' + fmt(v) : v, name]}
+                formatter={(v: any, name: any) => [name === 'revenue' ? 'R' + fmt(Number(v)) : v, name]}
               />
               <Area type="monotone" dataKey="revenue" stroke="#10b981" fill="url(#revGrad)" strokeWidth={2} name="revenue" />
               <Area type="monotone" dataKey="leads"   stroke="#6929f5" fill="url(#leadGrad)" strokeWidth={2} name="leads" />
@@ -168,11 +168,11 @@ export default function AnalyticsPage() {
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={CHANNEL_DATA} layout="vertical">
               <CartesianGrid strokeDasharray="3 3" stroke="#2a2a4a" horizontal={false} />
-              <XAxis type="number" tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} tickFormatter={(v) => 'R' + Math.round(v / 1000) + 'k'} />
+              <XAxis type="number" tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} tickFormatter={(v: any) => 'R' + Math.round(Number(v) / 1000) + 'k'} />
               <YAxis dataKey="channel" type="category" tick={{ fontSize: 12, fill: '#8b8fd8' }} axisLine={false} tickLine={false} width={80} />
               <Tooltip
                 contentStyle={{ borderRadius: '10px', border: '1px solid #2a2a4a', background: '#12122a', color: '#fff', fontSize: '12px' }}
-                formatter={(v: number) => ['R' + fmt(v), 'Revenue']}
+                formatter={(v: any) => ['R' + fmt(Number(v)), 'Revenue']}
               />
               <Bar dataKey="revenue" fill="#6929f5" radius={[0, 4, 4, 0]} />
             </BarChart>
@@ -188,7 +188,7 @@ export default function AnalyticsPage() {
               <YAxis tick={{ fontSize: 11, fill: '#8b8fd8' }} axisLine={false} tickLine={false} unit="%" />
               <Tooltip
                 contentStyle={{ borderRadius: '10px', border: '1px solid #2a2a4a', background: '#12122a', color: '#fff', fontSize: '12px' }}
-                formatter={(v: number) => [v + '%', '']}
+                formatter={(v: any) => [v + '%', '']}
               />
               <Bar dataKey="open"  name="Open"  fill="#6929f5" radius={[3, 3, 0, 0]} />
               <Bar dataKey="click" name="Click" fill="#f5a623" radius={[3, 3, 0, 0]} />
