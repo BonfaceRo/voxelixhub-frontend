@@ -13,6 +13,7 @@ import {
   Settings,
   LogOut,
   Zap,
+  Package,
 } from 'lucide-react';
 
 const NAV_ITEMS = [
