@@ -86,7 +86,7 @@ function StatCard({ icon: Icon, label, value, trend, color }: {
 }
 
 export default function DashboardPage() {
-  const [greeting, setGreeting] = useState('Welcome');
+  const [greeting, setGreeting] = useState('');
   const [userName, setUserName] = useState('');
   const [timeRange, setTimeRange] = useState('7d');
 
@@ -119,7 +119,7 @@ export default function DashboardPage() {
                   : 'bg-dark-300 border border-dark-100 text-gray-400 hover:text-white'
               }`}
             >
-              {r}
+              {r}u
             </button>
           ))}
         </div>
