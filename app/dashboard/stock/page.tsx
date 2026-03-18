@@ -1,10 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Edit2, Trash2, CheckCircle, Package, DollarSign, Tag, Search } from 'lucide-react';
-import { getToken } from '@/lib/api';
+import { Plus, Trash2, CheckCircle, Package, DollarSign, Tag, Search } from 'lucide-react';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
+function getToken() {
+  if (typeof window === 'undefined') return null;
+  return localStorage.getItem('token');
+}
 
 interface StockItem {
   id: string;
@@ -30,26 +34,39 @@ function AddItemModal({ onClose, onAdd }: { onClose: () => void; onAdd: (item: a
     category: '', condition: 'NEW', status: 'AVAILABLE', quantity: '1',
   });
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleAdd = async () => {
     if (!form.name) return;
     setLoading(true);
+    setError('');
     try {
+      const token = getToken();
       const res = await fetch(`${API_URL}/v1/stock`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${getToken()}`,
+          'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          name:        form.name,
+          description: form.description,
+          price:       form.price,
+          category:    form.category,
+          condition:   form.condition,
+          status:      form.status,
+          quantity:    form.quantity,
+        }),
       });
       const data = await res.json();
       if (res.ok) {
         onAdd(data.item);
         onClose();
+      } else {
+        setError(data.error || 'Failed to add item');
       }
-    } catch (error) {
-      console.error(error);
+    } catch (err) {
+      setError('Cannot connect to server');
     } finally {
       setLoading(false);
     }
@@ -59,6 +76,11 @@ function AddItemModal({ onClose, onAdd }: { onClose: () => void; onAdd: (item: a
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
       <div className="bg-dark-300 border border-dark-100 rounded-xl w-full max-w-lg p-6">
         <h2 className="font-bold text-lg text-white mb-6">Add Stock Item</h2>
+        {error && (
+          <div className="mb-4 p-3 rounded-lg text-sm bg-red-500/10 border border-red-500/30 text-red-400">
+            {error}
+          </div>
+        )}
         <div className="space-y-4">
           <div>
             <label className="text-sm font-medium text-gray-400 mb-1.5 block">Item Name *</label>
@@ -137,7 +159,10 @@ function AddItemModal({ onClose, onAdd }: { onClose: () => void; onAdd: (item: a
           </div>
         </div>
         <div className="flex gap-3 mt-6">
-          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-dark-100 text-gray-400 text-sm font-medium hover:bg-dark-200 transition-colors">
+          <button
+            onClick={onClose}
+            className="flex-1 px-4 py-2.5 rounded-lg border border-dark-100 text-gray-400 text-sm font-medium hover:bg-dark-200 transition-colors"
+          >
             Cancel
           </button>
           <button
@@ -154,11 +179,11 @@ function AddItemModal({ onClose, onAdd }: { onClose: () => void; onAdd: (item: a
 }
 
 export default function StockPage() {
-  const [stock, setStock]       = useState<StockItem[]>([]);
-  const [loading, setLoading]   = useState(true);
+  const [stock, setStock]         = useState<StockItem[]>([]);
+  const [loading, setLoading]     = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [search, setSearch]     = useState('');
-  const [filter, setFilter]     = useState('ALL');
+  const [search, setSearch]       = useState('');
+  const [filter, setFilter]       = useState('ALL');
 
   useEffect(() => {
     fetchStock();
@@ -166,8 +191,9 @@ export default function StockPage() {
 
   const fetchStock = async () => {
     try {
+      const token = getToken();
       const res = await fetch(`${API_URL}/v1/stock`, {
-        headers: { 'Authorization': `Bearer ${getToken()}` },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       const data = await res.json();
       setStock(data.stock || []);
@@ -180,9 +206,10 @@ export default function StockPage() {
 
   const markAsSold = async (id: string) => {
     try {
+      const token = getToken();
       await fetch(`${API_URL}/v1/stock/${id}/sold`, {
         method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${getToken()}` },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       setStock(prev => prev.map(s => s.id === id ? { ...s, status: 'SOLD' } : s));
     } catch (error) {
@@ -192,9 +219,10 @@ export default function StockPage() {
 
   const deleteItem = async (id: string) => {
     try {
+      const token = getToken();
       await fetch(`${API_URL}/v1/stock/${id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${getToken()}` },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       setStock(prev => prev.filter(s => s.id !== id));
     } catch (error) {
@@ -212,15 +240,11 @@ export default function StockPage() {
   const sold      = stock.filter(s => s.status === 'SOLD').length;
   const reserved  = stock.filter(s => s.status === 'RESERVED').length;
 
-  const formatPrice = (price: number) => {
-    return 'R' + price.toLocaleString('en-ZA');
-  };
-
   return (
     <div className="max-w-7xl mx-auto animate-fade-in">
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-white">Stock & Inventory</h1>
+          <h1 className="text-2xl font-bold text-white">Stock and Inventory</h1>
           <p className="text-gray-500 mt-1">
             Manage your stock — AI uses this to answer customer questions
           </p>
@@ -236,10 +260,10 @@ export default function StockPage() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[
-          { label: 'Total Items',  value: stock.length,  icon: Package,      color: 'text-brand-400',  bg: 'bg-brand-500/20'  },
-          { label: 'Available',    value: available,     icon: CheckCircle,  color: 'text-green-400',  bg: 'bg-green-500/20'  },
-          { label: 'Reserved',     value: reserved,      icon: Tag,          color: 'text-amber-400',  bg: 'bg-amber-500/20'  },
-          { label: 'Sold',         value: sold,          icon: DollarSign,   color: 'text-red-400',    bg: 'bg-red-500/20'    },
+          { label: 'Total Items', value: stock.length, icon: Package,     color: 'text-brand-400', bg: 'bg-brand-500/20' },
+          { label: 'Available',   value: available,    icon: CheckCircle, color: 'text-green-400', bg: 'bg-green-500/20' },
+          { label: 'Reserved',    value: reserved,     icon: Tag,         color: 'text-amber-400', bg: 'bg-amber-500/20' },
+          { label: 'Sold',        value: sold,         icon: DollarSign,  color: 'text-red-400',   bg: 'bg-red-500/20'   },
         ].map((s) => (
           <div key={s.label} className="bg-dark-300 border border-dark-100 rounded-xl p-5">
             <div className={['w-9 h-9 rounded-xl flex items-center justify-center mb-3', s.bg, s.color].join(' ')}>
@@ -268,7 +292,7 @@ export default function StockPage() {
               key={f}
               onClick={() => setFilter(f)}
               className={[
-                'px-3 py-1.5 rounded-md text-xs font-semibold transition-all capitalize',
+                'px-3 py-1.5 rounded-md text-xs font-semibold transition-all',
                 filter === f ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'
               ].join(' ')}
             >
@@ -300,7 +324,7 @@ export default function StockPage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-dark-100">
-                  {['Item', 'Category', 'Condition', 'Price', 'Quantity', 'Status', 'Actions'].map((h) => (
+                  {['Item', 'Category', 'Condition', 'Price', 'Qty', 'Status', 'Actions'].map((h) => (
                     <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
                       {h}
                     </th>
@@ -323,7 +347,7 @@ export default function StockPage() {
                       </span>
                     </td>
                     <td className="px-4 py-4 text-white font-semibold">
-                      {item.price ? formatPrice(item.price) : '—'}
+                      {item.price ? 'R' + Number(item.price).toLocaleString('en-ZA') : '—'}
                     </td>
                     <td className="px-4 py-4 text-gray-400">{item.quantity}</td>
                     <td className="px-4 py-4">
