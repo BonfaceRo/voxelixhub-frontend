@@ -22,6 +22,7 @@ const NAV_ITEMS = [
       { href: '/dashboard',          icon: LayoutDashboard, label: 'Dashboard' },
       { href: '/dashboard/leads',    icon: Users,           label: 'Leads & CRM' },
       { href: '/dashboard/inbox',    icon: MessageSquare,   label: 'AI Inbox' },
+      { href: '/dashboard/stock',   icon: Package,         label: 'Stock & Inventory' },
     ],
   },
   {
