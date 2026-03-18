@@ -5,6 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Zap, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+
 export default function LoginPage() {
   const router = useRouter();
   const [form, setForm] = useState({ email: '', password: '' });
@@ -20,7 +22,7 @@ export default function LoginPage() {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch('http://localhost:4000/v1/auth/login', {
+      const res = await fetch(`${API_URL}/v1/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -42,23 +44,24 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-dark-400 flex items-center justify-center p-4">
+    <div className="min-h-screen flex items-center justify-center p-4" style={{ background: '#080810' }}>
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <div className="w-10 h-10 rounded-xl bg-brand-500 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #6929f5, #8b5cf6)' }}>
               <Zap size={20} className="text-white" />
             </div>
-            <span className="font-bold text-white text-2xl">Voxelix</span>
-            <span className="text-accent-500 font-bold text-2xl">Hub</span>
+            <span style={{ fontFamily: 'Georgia, serif', fontSize: '1.5rem', fontWeight: 700, color: '#f0f0f5' }}>
+              Voxelix<span style={{ color: '#c9a84c' }}>Hub</span>
+            </span>
           </div>
-          <h1 className="text-2xl font-bold text-white">Welcome back</h1>
-          <p className="text-gray-500 mt-1">Sign in to your account</p>
+          <h1 style={{ fontFamily: 'Georgia, serif', fontSize: '1.5rem', fontWeight: 700, color: '#f0f0f5' }}>Welcome back</h1>
+          <p className="text-gray-500 mt-1 text-sm">Sign in to your account</p>
         </div>
 
-        <div className="bg-dark-300 border border-dark-100 rounded-2xl p-8">
+        <div className="rounded-2xl p-8" style={{ background: '#0f0f1a', border: '1px solid #1e1e35' }}>
           {error && (
-            <div className="mb-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+            <div className="mb-4 p-3 rounded-lg text-sm" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.3)', color: '#f87171' }}>
               {error}
             </div>
           )}
@@ -74,7 +77,8 @@ export default function LoginPage() {
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
                   onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                   placeholder="you@example.com"
-                  className="w-full pl-10 pr-4 py-3 rounded-xl border border-dark-100 bg-dark-200 text-white text-sm outline-none focus:border-brand-500 transition-colors"
+                  className="w-full pl-10 pr-4 py-3 rounded-xl text-white text-sm outline-none"
+                  style={{ background: '#161625', border: '1px solid #1e1e35' }}
                 />
               </div>
             </div>
@@ -89,12 +93,10 @@ export default function LoginPage() {
                   onChange={(e) => setForm({ ...form, password: e.target.value })}
                   onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
                   placeholder="••••••••"
-                  className="w-full pl-10 pr-10 py-3 rounded-xl border border-dark-100 bg-dark-200 text-white text-sm outline-none focus:border-brand-500 transition-colors"
+                  className="w-full pl-10 pr-10 py-3 rounded-xl text-white text-sm outline-none"
+                  style={{ background: '#161625', border: '1px solid #1e1e35' }}
                 />
-                <button
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                >
+                <button onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
                   {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
                 </button>
               </div>
@@ -103,32 +105,22 @@ export default function LoginPage() {
             <button
               onClick={handleLogin}
               disabled={loading}
-              className="w-full py-3 rounded-xl bg-brand-500 text-white font-semibold hover:bg-brand-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full py-3 rounded-xl text-white font-semibold text-sm transition-all disabled:opacity-50"
+              style={{ background: 'linear-gradient(135deg, #6929f5, #8b5cf6)', boxShadow: '0 4px 16px rgba(105,41,245,0.35)' }}
             >
-              {loading ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                'Sign In'
-              )}
+              {loading ? 'Signing in...' : 'Sign In'}
             </button>
           </div>
 
           <div className="mt-6 text-center">
             <p className="text-gray-500 text-sm">
               Do not have an account?{' '}
-              <Link href="/auth/register" className="text-brand-400 hover:text-brand-300 font-semibold">
+              <Link href="/auth/register" className="font-semibold" style={{ color: '#a78bfa' }}>
                 Create one free
               </Link>
             </p>
           </div>
         </div>
-
-        <p className="text-center text-xs text-gray-600 mt-6">
-          By signing in you agree to our Terms of Service and Privacy Policy
-        </p>
       </div>
     </div>
   );
