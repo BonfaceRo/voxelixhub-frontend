@@ -1,143 +1,199 @@
 'use client';
 
-import { useState } from 'react';
-import { Plus, Mail, MessageSquare, Play, Pause, Trash2, Edit2, Zap, BarChart2, Users, Clock } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+import { Plus, Mail, MessageSquare, Play, Pause, Trash2, Zap, BarChart2, Users, Clock, RefreshCw } from 'lucide-react';
+
+const API = process.env.NEXT_PUBLIC_API_URL || 'https://voxelixhub-backend.onrender.com';
+
+function getToken() {
+  return localStorage.getItem('token') || '';
+}
+
+async function apiFetch(path: string, options: RequestInit = {}) {
+  const res = await fetch(`${API}${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getToken()}`,
+      ...(options.headers || {}),
+    },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Request failed');
+  return data;
+}
+
+interface CampaignStep {
+  delayDays: number;
+  subject?: string;
+  body: string;
+}
 
 interface Campaign {
   id: string;
   name: string;
-  type: 'EMAIL' | 'SMS';
-  status: 'ACTIVE' | 'PAUSED' | 'DRAFT' | 'COMPLETED';
-  subject: string;
-  audience: number;
-  sent: number;
-  opened: number;
-  clicked: number;
-  converted: number;
-  steps: number;
+  description?: string;
+  channel: 'EMAIL' | 'SMS';
+  status: 'ACTIVE' | 'PAUSED' | 'DRAFT' | 'ARCHIVED';
+  trigger: string;
+  steps: CampaignStep[];
+  _count?: { enrollments: number };
   createdAt: string;
 }
 
-const MOCK_CAMPAIGNS: Campaign[] = [
-  { id: '1', name: 'Welcome New Leads',   type: 'EMAIL', status: 'ACTIVE',    subject: 'Welcome to Cape Town Auto!',              audience: 342, sent: 342, opened: 271, clicked: 98,  converted: 23, steps: 5, createdAt: '2026-03-10' },
-  { id: '2', name: 'Hot Lead Follow-Up',  type: 'SMS',   status: 'ACTIVE',    subject: 'Follow up on your enquiry',               audience: 87,  sent: 87,  opened: 79,  clicked: 44,  converted: 18, steps: 3, createdAt: '2026-03-12' },
-  { id: '3', name: 'Test Drive No-Show',  type: 'EMAIL', status: 'PAUSED',    subject: 'We missed you — rebook your test drive',  audience: 45,  sent: 22,  opened: 10,  clicked: 4,   converted: 1,  steps: 2, createdAt: '2026-03-08' },
-  { id: '4', name: 'End of Month Special',type: 'EMAIL', status: 'COMPLETED', subject: 'March Special — R50k off selected models',audience: 890, sent: 890, opened: 654, clicked: 230, converted: 45, steps: 1, createdAt: '2026-03-01' },
-  { id: '5', name: 'Finance Pre-Approval',type: 'SMS',   status: 'DRAFT',     subject: 'Get pre-approved in 5 minutes',           audience: 0,   sent: 0,   opened: 0,   clicked: 0,   converted: 0,  steps: 3, createdAt: '2026-03-16' },
-];
+interface NewCampaignForm {
+  name: string;
+  description: string;
+  channel: string;
+  trigger: string;
+  steps: CampaignStep[];
+}
 
 const STATUS_STYLES: Record<string, string> = {
-  ACTIVE:    'bg-green-500/20 text-green-400',
-  PAUSED:    'bg-amber-500/20 text-amber-400',
-  DRAFT:     'bg-gray-500/20 text-gray-400',
-  COMPLETED: 'bg-brand-500/20 text-brand-400',
+  ACTIVE:   'bg-green-500/20 text-green-400',
+  PAUSED:   'bg-amber-500/20 text-amber-400',
+  DRAFT:    'bg-gray-500/20 text-gray-400',
+  ARCHIVED: 'bg-red-500/20 text-red-400',
 };
 
-function fmt(n: number): string {
-  return n.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+function fmt(n: number) {
+  return (n || 0).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
-interface NewCampaign {
-  name: string;
-  type: string;
-  subject: string;
-  message: string;
-}
-
-function NewCampaignModal({ onClose, onAdd }: { onClose: () => void; onAdd: (c: NewCampaign) => void }) {
-  const [form, setForm] = useState<NewCampaign>({ name: '', type: 'EMAIL', subject: '', message: '' });
+function NewCampaignModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+  const [form, setForm] = useState<NewCampaignForm>({
+    name: '', description: '', channel: 'EMAIL', trigger: 'MANUAL',
+    steps: [{ delayDays: 0, subject: '', body: '' }],
+  });
+  const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState('');
+
+  const addStep = () => setForm(f => ({
+    ...f, steps: [...f.steps, { delayDays: f.steps.length * 3, subject: '', body: '' }],
+  }));
+
+  const updateStep = (i: number, field: string, value: string | number) => {
+    setForm(f => ({ ...f, steps: f.steps.map((s, idx) => idx === i ? { ...s, [field]: value } : s) }));
+  };
 
   const generateAI = async () => {
     if (!form.name) return;
     setGenerating(true);
-    await new Promise((r) => setTimeout(r, 1500));
-    setForm({
-      ...form,
-      subject: 'Special offer — ' + form.name,
-      message: 'Hi [First Name],\n\nThank you for your interest in Cape Town Auto.\n\n' + form.name + '.\n\nReply YES to learn more or call us on 021 123 4567.\n\nBest regards,\nCape Town Auto Team',
-    });
-    setGenerating(false);
+    try {
+      const subject = `Special offer — ${form.name}`;
+      const body = form.channel === 'EMAIL'
+        ? `<p>Hi [First Name],</p><p>Thank you for your interest. We have an exclusive offer regarding <strong>${form.name}</strong>.</p><p>Reply to this email or call us to learn more.</p><p>Best regards,<br/>The Team</p>`
+        : `Hi [First Name], we have a special offer for you: ${form.name}. Reply YES to learn more or call us now.`;
+      setForm(f => ({ ...f, steps: f.steps.map((s, i) => i === 0 ? { ...s, subject, body } : s) }));
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!form.name || !form.steps[0]?.body) { setError('Name and message body are required'); return; }
+    setSaving(true); setError('');
+    try {
+      await apiFetch('/v1/campaigns', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: form.name,
+          description: form.description,
+          channel: form.channel,
+          trigger: form.trigger,
+          steps: form.steps.map((s, i) => ({
+            stepNumber: i + 1,
+            delayDays: parseInt(String(s.delayDays)) || 0,
+            subject: s.subject || null,
+            body: s.body,
+          })),
+        }),
+      });
+      onSaved(); onClose();
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
-      <div className="bg-dark-300 border border-dark-100 rounded-xl w-full max-w-lg p-6">
-        <h2 className="font-bold text-lg text-white mb-6">Create New Campaign</h2>
+    <div style={{ position:'fixed',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:50,padding:'1rem',overflowY:'auto' }}>
+      <div className="bg-dark-300 border border-dark-100 rounded-xl w-full max-w-lg p-6 my-8">
+        <h2 className="font-bold text-lg text-white mb-5">Create new campaign</h2>
+        {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
         <div className="space-y-4">
           <div>
-            <label className="text-sm font-medium text-gray-400 mb-1.5 block">Campaign Name *</label>
-            <input
-              className="w-full px-3 py-2.5 rounded-lg border border-dark-100 bg-dark-200 text-white text-sm outline-none focus:border-brand-500 transition-colors"
-              value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder="e.g. March Special Offer"
-            />
+            <label className="text-sm font-medium text-gray-400 mb-1.5 block">Campaign name *</label>
+            <input className="w-full px-3 py-2.5 rounded-lg border border-dark-100 bg-dark-200 text-white text-sm outline-none focus:border-brand-500 transition-colors"
+              value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Welcome new leads" />
           </div>
           <div>
-            <label className="text-sm font-medium text-gray-400 mb-1.5 block">Type</label>
+            <label className="text-sm font-medium text-gray-400 mb-1.5 block">Channel</label>
             <div className="flex gap-2">
-              {['EMAIL', 'SMS'].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setForm({ ...form, type: t })}
-                  className={[
-                    'flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-semibold transition-all',
-                    form.type === t
-                      ? 'bg-brand-500/20 border-brand-500/50 text-brand-400'
-                      : 'border-dark-100 text-gray-400 hover:border-gray-600'
-                  ].join(' ')}
-                >
-                  {t === 'EMAIL' ? <Mail size={15} /> : <MessageSquare size={15} />}
-                  {t}
+              {['EMAIL', 'SMS'].map(ch => (
+                <button key={ch} onClick={() => setForm(f => ({ ...f, channel: ch }))}
+                  className={['flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg border text-sm font-semibold transition-all',
+                    form.channel === ch ? 'bg-brand-500/20 border-brand-500/50 text-brand-400' : 'border-dark-100 text-gray-400 hover:border-gray-600'].join(' ')}>
+                  {ch === 'EMAIL' ? <Mail size={15} /> : <MessageSquare size={15} />}{ch}
                 </button>
               ))}
             </div>
           </div>
-          {form.type === 'EMAIL' && (
-            <div>
-              <label className="text-sm font-medium text-gray-400 mb-1.5 block">Subject Line</label>
-              <input
-                className="w-full px-3 py-2.5 rounded-lg border border-dark-100 bg-dark-200 text-white text-sm outline-none focus:border-brand-500 transition-colors"
-                value={form.subject}
-                onChange={(e) => setForm({ ...form, subject: e.target.value })}
-                placeholder="e.g. Special offer just for you"
-              />
-            </div>
-          )}
           <div>
-            <div className="flex items-center justify-between mb-1.5">
-              <label className="text-sm font-medium text-gray-400">Message</label>
-              <button
-                onClick={generateAI}
-                disabled={generating || !form.name}
-                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-accent-500/10 border border-accent-500/30 text-accent-400 text-xs font-semibold hover:bg-accent-500/20 transition-colors disabled:opacity-40"
-              >
-                <Zap size={12} />
-                {generating ? 'Generating...' : 'AI Generate'}
-              </button>
+            <label className="text-sm font-medium text-gray-400 mb-1.5 block">Trigger</label>
+            <select className="w-full px-3 py-2.5 rounded-lg border border-dark-100 bg-dark-200 text-white text-sm outline-none"
+              value={form.trigger} onChange={e => setForm(f => ({ ...f, trigger: e.target.value }))}>
+              <option value="MANUAL">Manual enrollment</option>
+              <option value="NEW_LEAD">New lead created</option>
+              <option value="STATUS_CHANGE">Lead status changes</option>
+            </select>
+          </div>
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="text-sm font-medium text-gray-400">Steps ({form.steps.length})</label>
+              <div className="flex gap-2">
+                <button onClick={generateAI} disabled={generating || !form.name}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-accent-500/10 border border-accent-500/30 text-accent-400 text-xs font-semibold hover:bg-accent-500/20 transition-colors disabled:opacity-40">
+                  <Zap size={12} />{generating ? 'Generating...' : 'AI fill step 1'}
+                </button>
+                <button onClick={addStep}
+                  className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-dark-200 border border-dark-100 text-gray-400 text-xs font-semibold hover:text-white transition-colors">
+                  <Plus size={12} /> Add step
+                </button>
+              </div>
             </div>
-            <textarea
-              className="w-full px-3 py-2.5 rounded-lg border border-dark-100 bg-dark-200 text-white text-sm outline-none focus:border-brand-500 transition-colors resize-none h-32"
-              value={form.message}
-              onChange={(e) => setForm({ ...form, message: e.target.value })}
-              placeholder="Write your message or click AI Generate..."
-            />
+            {form.steps.map((step, i) => (
+              <div key={i} className="border border-dark-100 rounded-lg p-3 mb-3 bg-dark-200">
+                <p className="text-xs font-semibold text-gray-400 mb-2">Step {i + 1}</p>
+                <div className="flex gap-2 mb-2">
+                  <div className="flex-1">
+                    <label className="text-xs text-gray-500 mb-1 block">Send after (days)</label>
+                    <input type="number" min={0}
+                      className="w-full px-2 py-1.5 rounded border border-dark-100 bg-dark-300 text-white text-sm outline-none"
+                      value={step.delayDays} onChange={e => updateStep(i, 'delayDays', parseInt(e.target.value) || 0)} />
+                  </div>
+                  {form.channel === 'EMAIL' && (
+                    <div className="flex-[2]">
+                      <label className="text-xs text-gray-500 mb-1 block">Subject</label>
+                      <input className="w-full px-2 py-1.5 rounded border border-dark-100 bg-dark-300 text-white text-sm outline-none"
+                        value={step.subject || ''} onChange={e => updateStep(i, 'subject', e.target.value)} placeholder="Email subject" />
+                    </div>
+                  )}
+                </div>
+                <label className="text-xs text-gray-500 mb-1 block">Message body</label>
+                <textarea className="w-full px-2 py-1.5 rounded border border-dark-100 bg-dark-300 text-white text-sm outline-none resize-none h-24"
+                  value={step.body} onChange={e => updateStep(i, 'body', e.target.value)} placeholder="Write your message..." />
+              </div>
+            ))}
           </div>
         </div>
-        <div className="flex gap-3 mt-6">
-          <button
-            onClick={onClose}
-            className="flex-1 px-4 py-2.5 rounded-lg border border-dark-100 text-gray-400 text-sm font-medium hover:bg-dark-200 transition-colors"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={() => { onAdd(form); onClose(); }}
-            disabled={!form.name}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors disabled:opacity-40"
-          >
-            Create Campaign
+        <div className="flex gap-3 mt-5">
+          <button onClick={onClose} className="flex-1 px-4 py-2.5 rounded-lg border border-dark-100 text-gray-400 text-sm font-medium hover:bg-dark-200 transition-colors">Cancel</button>
+          <button onClick={handleSave} disabled={saving || !form.name}
+            className="flex-1 px-4 py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors disabled:opacity-40">
+            {saving ? 'Saving...' : 'Create campaign'}
           </button>
         </div>
       </div>
@@ -146,54 +202,51 @@ function NewCampaignModal({ onClose, onAdd }: { onClose: () => void; onAdd: (c: 
 }
 
 export default function CampaignsPage() {
-  const [campaigns, setCampaigns] = useState<Campaign[]>(MOCK_CAMPAIGNS);
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [filter, setFilter] = useState('ALL');
 
-  const filtered = campaigns.filter((c) => filter === 'ALL' || c.status === filter);
+  const fetchCampaigns = useCallback(async () => {
+    setLoading(true); setError('');
+    try {
+      const data = await apiFetch('/v1/campaigns');
+      setCampaigns(data.campaigns || []);
+    } catch (e: any) {
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
-  const toggleStatus = (id: string) => {
-    setCampaigns((prev) =>
-      prev.map((c) =>
-        c.id === id
-          ? { ...c, status: c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE' }
-          : c
-      )
-    );
+  useEffect(() => { fetchCampaigns(); }, [fetchCampaigns]);
+
+  const toggleStatus = async (c: Campaign) => {
+    const newStatus = c.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+    try {
+      await apiFetch(`/v1/campaigns/${c.id}/status`, { method: 'PATCH', body: JSON.stringify({ status: newStatus }) });
+      fetchCampaigns();
+    } catch (e: any) { alert(e.message); }
   };
 
-  const deleteCampaign = (id: string) => {
-    setCampaigns((prev) => prev.filter((c) => c.id !== id));
+  const deleteCampaign = async (id: string) => {
+    if (!confirm('Delete this campaign?')) return;
+    try {
+      await apiFetch(`/v1/campaigns/${id}`, { method: 'DELETE' });
+      fetchCampaigns();
+    } catch (e: any) { alert(e.message); }
   };
 
-  const handleAdd = (data: NewCampaign) => {
-    const newCampaign: Campaign = {
-      id: Date.now().toString(),
-      name: data.name,
-      type: data.type as 'EMAIL' | 'SMS',
-      status: 'DRAFT',
-      subject: data.subject,
-      audience: 0,
-      sent: 0,
-      opened: 0,
-      clicked: 0,
-      converted: 0,
-      steps: 1,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    setCampaigns((prev) => [newCampaign, ...prev]);
-  };
-
-  const totalSent = campaigns.reduce((a, c) => a + c.sent, 0);
-  const totalOpened = campaigns.reduce((a, c) => a + c.opened, 0);
-  const totalConverted = campaigns.reduce((a, c) => a + c.converted, 0);
-  const openRate = totalSent > 0 ? Math.round((totalOpened / totalSent) * 100) : 0;
+  const filtered = campaigns.filter(c => filter === 'ALL' || c.status === filter);
+  const totalEnrollments = campaigns.reduce((a, c) => a + (c._count?.enrollments || 0), 0);
+  const active = campaigns.filter(c => c.status === 'ACTIVE').length;
 
   const STATS = [
-    { label: 'Total Sent',   value: fmt(totalSent),      icon: Mail,     color: 'text-brand-400', bg: 'bg-brand-500/20' },
-    { label: 'Open Rate',    value: openRate + '%',       icon: BarChart2, color: 'text-green-400', bg: 'bg-green-500/20' },
-    { label: 'Conversions',  value: fmt(totalConverted),  icon: Users,    color: 'text-amber-400', bg: 'bg-amber-500/20' },
-    { label: 'Active Flows', value: String(campaigns.filter((c) => c.status === 'ACTIVE').length), icon: Zap, color: 'text-purple-400', bg: 'bg-purple-500/20' },
+    { label: 'Total campaigns', value: String(campaigns.length), icon: Mail,     color: 'text-brand-400', bg: 'bg-brand-500/20' },
+    { label: 'Active',          value: String(active),           icon: Zap,      color: 'text-green-400', bg: 'bg-green-500/20' },
+    { label: 'Enrollments',     value: fmt(totalEnrollments),    icon: Users,    color: 'text-amber-400', bg: 'bg-amber-500/20' },
+    { label: 'Channels',        value: '2',                      icon: BarChart2,color: 'text-purple-400',bg: 'bg-purple-500/20' },
   ];
 
   return (
@@ -201,19 +254,21 @@ export default function CampaignsPage() {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-white">Campaigns</h1>
-          <p className="text-gray-500 mt-1">Email and SMS drip sequences powered by AI</p>
+          <p className="text-gray-500 mt-1">Email and SMS drip sequences</p>
         </div>
-        <button
-          onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors"
-        >
-          <Plus size={16} />
-          New Campaign
-        </button>
+        <div className="flex gap-2">
+          <button onClick={fetchCampaigns} className="p-2.5 rounded-lg border border-dark-100 text-gray-400 hover:text-white transition-colors">
+            <RefreshCw size={16} />
+          </button>
+          <button onClick={() => setShowModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg bg-brand-500 text-white text-sm font-semibold hover:bg-brand-600 transition-colors">
+            <Plus size={16} /> New campaign
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        {STATS.map((s) => (
+        {STATS.map(s => (
           <div key={s.label} className="bg-dark-300 border border-dark-100 rounded-xl p-5">
             <div className={['w-9 h-9 rounded-xl flex items-center justify-center mb-3', s.bg, s.color].join(' ')}>
               <s.icon size={18} />
@@ -225,114 +280,85 @@ export default function CampaignsPage() {
       </div>
 
       <div className="flex items-center gap-2 mb-4">
-        {['ALL', 'ACTIVE', 'PAUSED', 'DRAFT', 'COMPLETED'].map((f) => (
-          <button
-            key={f}
-            onClick={() => setFilter(f)}
-            className={[
-              'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
-              filter === f ? 'bg-brand-500 text-white' : 'bg-dark-300 border border-dark-100 text-gray-400 hover:text-white'
-            ].join(' ')}
-          >
+        {['ALL', 'ACTIVE', 'PAUSED', 'DRAFT', 'ARCHIVED'].map(f => (
+          <button key={f} onClick={() => setFilter(f)}
+            className={['px-3 py-1.5 rounded-lg text-xs font-semibold transition-all',
+              filter === f ? 'bg-brand-500 text-white' : 'bg-dark-300 border border-dark-100 text-gray-400 hover:text-white'].join(' ')}>
             {f}
           </button>
         ))}
       </div>
 
+      {error && <p className="text-red-400 text-sm mb-4">{error}</p>}
+
       <div className="bg-dark-300 border border-dark-100 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-dark-100">
-                {['Campaign', 'Type', 'Status', 'Audience', 'Open Rate', 'Conversions', 'Steps', 'Actions'].map((h) => (
-                  <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-dark-100">
-              {filtered.map((c) => (
-                <tr key={c.id} className="hover:bg-dark-200 transition-colors group">
-                  <td className="px-4 py-4">
-                    <p className="font-semibold text-white">{c.name}</p>
-                    <p className="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{c.subject}</p>
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className={['flex items-center gap-1.5 text-xs font-semibold w-fit', c.type === 'EMAIL' ? 'text-blue-400' : 'text-green-400'].join(' ')}>
-                      {c.type === 'EMAIL' ? <Mail size={13} /> : <MessageSquare size={13} />}
-                      {c.type}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4">
-                    <span className={['px-2 py-0.5 rounded-full text-xs font-semibold', STATUS_STYLES[c.status]].join(' ')}>
-                      {c.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-1 text-gray-400">
-                      <Users size={13} />
-                      <span>{fmt(c.audience)}</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <p className="text-white font-semibold">
-                      {c.sent > 0 ? Math.round((c.opened / c.sent) * 100) : 0}%
-                    </p>
-                    <p className="text-xs text-gray-500">{fmt(c.opened)} opened</p>
-                  </td>
-                  <td className="px-4 py-4">
-                    <p className="text-white font-semibold">{c.converted}</p>
-                    <p className="text-xs text-gray-500">
-                      {c.audience > 0 ? Math.round((c.converted / c.audience) * 100) : 0}% cvr
-                    </p>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-1 text-gray-400">
-                      <Clock size={13} />
-                      <span>{c.steps} steps</span>
-                    </div>
-                  </td>
-                  <td className="px-4 py-4">
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => toggleStatus(c.id)}
-                        className={[
-                          'p-1.5 rounded-md transition-colors',
-                          c.status === 'ACTIVE'
-                            ? 'hover:bg-amber-500/20 hover:text-amber-400 text-gray-500'
-                            : 'hover:bg-green-500/20 hover:text-green-400 text-gray-500'
-                        ].join(' ')}
-                      >
-                        {c.status === 'ACTIVE' ? <Pause size={14} /> : <Play size={14} />}
-                      </button>
-                      <button className="p-1.5 rounded-md hover:bg-brand-500/20 hover:text-brand-400 text-gray-500 transition-colors">
-                        <Edit2 size={14} />
-                      </button>
-                      <button
-                        onClick={() => deleteCampaign(c.id)}
-                        className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-gray-500 transition-colors"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </div>
-                  </td>
+        {loading ? (
+          <div className="flex items-center justify-center py-16 text-gray-500">Loading campaigns...</div>
+        ) : filtered.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-16 text-gray-500">
+            <Mail size={32} className="mb-3 opacity-30" />
+            <p className="font-medium">No campaigns yet</p>
+            <p className="text-sm mt-1">Create your first drip campaign to get started</p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-dark-100">
+                  {['Campaign', 'Channel', 'Status', 'Trigger', 'Steps', 'Enrollments', 'Actions'].map(h => (
+                    <th key={h} className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody className="divide-y divide-dark-100">
+                {filtered.map(c => (
+                  <tr key={c.id} className="hover:bg-dark-200 transition-colors group">
+                    <td className="px-4 py-4">
+                      <p className="font-semibold text-white">{c.name}</p>
+                      {c.description && <p className="text-xs text-gray-500 mt-0.5 truncate max-w-xs">{c.description}</p>}
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={['flex items-center gap-1.5 text-xs font-semibold w-fit', c.channel === 'EMAIL' ? 'text-blue-400' : 'text-green-400'].join(' ')}>
+                        {c.channel === 'EMAIL' ? <Mail size={13} /> : <MessageSquare size={13} />}{c.channel}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
+                      <span className={['px-2 py-0.5 rounded-full text-xs font-semibold', STATUS_STYLES[c.status]].join(' ')}>{c.status}</span>
+                    </td>
+                    <td className="px-4 py-4 text-gray-400 text-xs">{c.trigger}</td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-1 text-gray-400">
+                        <Clock size={13} /><span>{c.steps?.length || 0} steps</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-1 text-gray-400">
+                        <Users size={13} /><span>{fmt(c._count?.enrollments || 0)}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-4">
+                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button onClick={() => toggleStatus(c)}
+                          className={['p-1.5 rounded-md transition-colors', c.status === 'ACTIVE' ? 'hover:bg-amber-500/20 hover:text-amber-400 text-gray-500' : 'hover:bg-green-500/20 hover:text-green-400 text-gray-500'].join(' ')}>
+                          {c.status === 'ACTIVE' ? <Pause size={14} /> : <Play size={14} />}
+                        </button>
+                        <button onClick={() => deleteCampaign(c.id)} className="p-1.5 rounded-md hover:bg-red-500/20 hover:text-red-400 text-gray-500 transition-colors">
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
         <div className="px-4 py-3 border-t border-dark-100 text-xs text-gray-500">
           Showing {filtered.length} of {campaigns.length} campaigns
         </div>
       </div>
 
-      {showModal && (
-        <NewCampaignModal
-          onClose={() => setShowModal(false)}
-          onAdd={handleAdd}
-        />
-      )}
+      {showModal && <NewCampaignModal onClose={() => setShowModal(false)} onSaved={fetchCampaigns} />}
     </div>
   );
 }
