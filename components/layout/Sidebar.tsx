@@ -30,6 +30,7 @@ const NAV_ITEMS = [
     group: 'Marketing',
     items: [
       { href: '/dashboard/campaigns', icon: Mail,     label: 'Campaigns' },
+      { href: '/dashboard/prospects', icon: Users,    label: 'Prospecting' },
       { href: '/dashboard/analytics', icon: BarChart3, label: 'Analytics' },
     ],
   },
